@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AudioSentry — Real-time Voice Sentinel & Deepfake Radar</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            sentry: {
+              bg: '#070b14',
+              surface: '#0f172a',
+              card: '#131d33',
+              border: '#1e293b',
+              emerald: '#10b981',
+              rose: '#f43f5e',
+              cyan: '#06b6d4',
+              amber: '#f59e0b',
+            }
+          },
+          fontFamily: {
+            mono: ['JetBrains Mono', 'Menlo', 'Consolas', 'monospace'],
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          animation: {
+            'glow-red': 'glowRed 1.8s ease-in-out infinite alternate',
+            'glow-green': 'glowGreen 1.8s ease-in-out infinite alternate',
+          },
+          keyframes: {
+            glowRed: {
+              '0%': { boxShadow: '0 0 15px rgba(244, 63, 94, 0.2)' },
+              '100%': { boxShadow: '0 0 35px rgba(244, 63, 94, 0.65)' },
+            },
+            glowGreen: {
+              '0%': { boxShadow: '0 0 15px rgba(16, 185, 129, 0.2)' },
+              '100%': { boxShadow: '0 0 30px rgba(16, 185, 129, 0.55)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background-color: #070b14;
+      background-image: 
+        radial-gradient(at 15% 15%, rgba(6, 182, 212, 0.08) 0px, transparent 50%),
+        radial-gradient(at 85% 85%, rgba(244, 63, 94, 0.06) 0px, transparent 50%),
+        linear-gradient(rgba(15, 23, 42, 0.4) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 23, 42, 0.4) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+    }
+    .hud-border {
+      border: 1px solid rgba(51, 65, 85, 0.6);
+      background: linear-gradient(135deg, rgba(19, 29, 51, 0.75) 0%, rgba(15, 23, 42, 0.85) 100%);
+      backdrop-filter: blur(12px);
+    }
+    .hud-border:hover {
+      border-color: rgba(6, 182, 212, 0.4);
+    }
+    .gauge-circle {
+      transition: stroke-dashoffset 0.25s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.3s ease;
+    }
+    .scan-line {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(to bottom, transparent 50%, rgba(0, 0, 0, 0.25) 51%);
+      background-size: 100% 4px;
+      pointer-events: none;
+      opacity: 0.35;
+    }
+  </style>
+</head>
+<body class="text-slate-200 font-sans min-h-screen flex flex-col selection:bg-cyan-500/30 selection:text-cyan-300">
+
+  <!-- TOP APP HEADER / STATUS BAR -->
+  <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 px-4 lg:px-8 py-3.5 flex items-center justify-between">
+    <div class="flex items-center space-x-3.5">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-500 p-0.5 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+        <div class="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
+          <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z" />
+          </svg>
+        </div>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <h1 class="text-lg font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-cyan-400 uppercase">
+            AudioSentry
+          </h1>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/70 border border-cyan-800/60 text-cyan-400 font-semibold tracking-widest">
+            DSP SENTINEL v1.0
+          </span>
+        </div>
+        <p class="text-xs text-slate-400 font-mono tracking-tight">Real-time Spectral & Glottal Micro-perturbation Radar</p>
+      </div>
+    </div>
+
+    <!-- Controls & Status -->
+    <div class="flex items-center space-x-3 sm:space-x-4">
+      <!-- WebSocket Status Pill -->
+      <div id="wsStatusBadge" class="flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400">
+        <span id="wsStatusDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+        <span id="wsStatusText">CONNECTING</span>
+      </div>
+
+      <!-- Mic Toggle Button -->
+      <button id="toggleMicBtn" class="flex items-center space-x-2 px-4 py-2 rounded-lg font-mono text-xs font-semibold uppercase tracking-wider transition-all duration-200 bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/25 active:scale-95">
+        <svg id="micIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z" />
+        </svg>
+        <span id="micBtnText">START SENTINEL</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN DASHBOARD CONTENT -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+    <!-- TOP SECTION: VERDICT BANNER & CONFIDENCE RADAR GAUGE -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Dynamic Verdict Card (Large Telemetry Display) -->
+      <div id="verdictCard" class="lg:col-span-8 hud-border rounded-2xl p-6 relative overflow-hidden transition-all duration-300 flex flex-col justify-between min-h-[260px]">
+        <div class="scan-line"></div>
+        <div class="flex items-start justify-between z-10">
+          <div>
+            <div class="text-[11px] font-mono tracking-widest text-slate-400 uppercase mb-1 flex items-center space-x-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+              <span>VOICE CLASSIFICATION VERDICT</span>
+            </div>
+            <h2 id="verdictTitle" class="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight uppercase transition-colors duration-200 text-slate-500">
+              STANDBY
+            </h2>
+          </div>
+          <div id="verdictIconWrap" class="w-16 h-16 rounded-2xl flex items-center justify-center border transition-all duration-300 bg-slate-800/40 border-slate-700/60 text-slate-500">
+            <!-- Shield / Alert SVG -->
+            <svg id="verdictIcon" class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+        </div>
+
+        <!-- Dynamic Contextual Message -->
+        <div class="my-4 z-10">
+          <p id="verdictDescription" class="text-sm sm:text-base font-mono text-slate-400 leading-relaxed">
+            Awaiting 16kHz microphone stream. Press "Start Sentinel" or "Simulate Synthetic Deepfake" below.
+          </p>
+        </div>
+
+        <!-- Telemetry Quick Status Indicators -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-slate-800/80 z-10 font-mono text-xs">
+          <div class="bg-slate-900/60 rounded-lg p-2.5 border border-slate-800/70">
+            <span class="text-slate-500 block text-[10px]">SPECTRAL CUTOFF</span>
+            <span id="quickRolloff" class="text-slate-300 font-semibold text-sm">-- Hz</span>
+          </div>
+          <div class="bg-slate-900/60 rounded-lg p-2.5 border border-slate-800/70">
+            <span class="text-slate-500 block text-[10px]">PHASE JITTER</span>
+            <span id="quickPhase" class="text-slate-300 font-semibold text-sm">--</span>
+          </div>
+          <div class="bg-slate-900/60 rounded-lg p-2.5 border border-slate-800/70">
+            <span class="text-slate-500 block text-[10px]">PITCH JITTER (F0)</span>
+            <span id="quickPitch" class="text-slate-300 font-semibold text-sm">-- %</span>
+          </div>
+          <div class="bg-slate-900/60 rounded-lg p-2.5 border border-slate-800/70">
+            <span class="text-slate-500 block text-[10px]">HF RATIO (>5.8k)</span>
+            <span id="quickHf" class="text-slate-300 font-semibold text-sm">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Confidence Radar / Circular Gauge Card -->
+      <div class="lg:col-span-4 hud-border rounded-2xl p-6 relative flex flex-col items-center justify-between min-h-[260px]">
+        <div class="w-full flex items-center justify-between mb-2">
+          <div class="text-[11px] font-mono tracking-widest text-slate-400 uppercase flex items-center space-x-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+            <span>CONFIDENCE METER</span>
+          </div>
+        </div>
+
+        <!-- Animated Circular Gauge (Anti-flicker CSS transition) -->
+        <div class="relative w-44 h-44 my-auto flex items-center justify-center">
+          <svg class="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
+            <!-- Background Track -->
+            <circle cx="60" cy="60" r="50" stroke="#1e293b" stroke-width="8" fill="none" stroke-linecap="round" />
+            <!-- Inner grid ticks -->
+            <circle cx="60" cy="60" r="42" stroke="#0f172a" stroke-width="2" fill="none" stroke-dasharray="4 4" />
+            <!-- Animated Value Circle -->
+            <circle id="gaugeProgressCircle" class="gauge-circle" cx="60" cy="60" r="50" stroke="#06b6d4" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="314.159" stroke-dashoffset="314.159" />
+          </svg>
+
+          <!-- Central Gauge Readout -->
+          <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+            <span id="confidencePercentage" class="text-4xl font-extrabold font-mono tracking-tight text-white">0%</span>
+            <span id="confidenceLabel" class="text-[10px] font-mono uppercase tracking-wider text-slate-400 mt-0.5">CONFIDENCE</span>
+          </div>
+        </div>
+
+        <!-- Gauge Footer -->
+        <div class="w-full text-center pt-2 border-t border-slate-800/80">
+          <div class="text-[11px] font-mono flex items-center justify-center space-x-3">
+            <span class="flex items-center space-x-1.5 text-emerald-400">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>HUMAN</span>
+            </span>
+            <span class="text-slate-700">|</span>
+            <span class="flex items-center space-x-1.5 text-rose-400">
+              <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+              <span>AI ALERT</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MIDDLE SECTION: LIVE 16kHz OSCILLOSCOPE & 64-BIN MEL-SPECTROGRAM HEATMAP -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- 1. Live 16kHz Oscilloscope Inspection Canvas -->
+      <div class="hud-border rounded-2xl p-5 flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center space-x-2">
+            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <h3 class="font-mono text-xs uppercase font-bold tracking-wider text-slate-200">
+              Live 16kHz Oscilloscope Inspection
+            </h3>
+          </div>
+          <div class="flex items-center space-x-2 text-[10px] font-mono text-slate-400">
+            <span>RMS: <strong id="rmsVal" class="text-cyan-400">0.0000</strong></span>
+            <span class="text-slate-700">|</span>
+            <span class="text-emerald-400">PHOSPHOR GRID</span>
+          </div>
+        </div>
+
+        <!-- Oscilloscope Canvas Container -->
+        <div class="relative w-full h-56 bg-slate-950 rounded-xl overflow-hidden border border-slate-800/80 shadow-inner">
+          <canvas id="oscilloscopeCanvas" class="w-full h-full block"></canvas>
+          <div class="scan-line"></div>
+          <div class="absolute top-2 left-3 text-[9px] font-mono text-slate-600 pointer-events-none">
+            Y: ±1.0 FS | TIME: 50ms CHUNK
+          </div>
+          <div class="absolute bottom-2 right-3 text-[9px] font-mono text-slate-600 pointer-events-none">
+            Fs = 16,000 Hz
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. 64-Bin Mel-Spectrogram Heatmap Placeholder & Real-Time Canvas -->
+      <div class="hud-border rounded-2xl p-5 flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center space-x-2">
+            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <h3 class="font-mono text-xs uppercase font-bold tracking-wider text-slate-200">
+              64-Bin Mel-Spectrogram Heatmap
+            </h3>
+          </div>
+          <div class="flex items-center space-x-2 text-[10px] font-mono text-slate-400">
+            <span class="inline-block w-2 h-2 rounded-full bg-rose-500"></span>
+            <span class="text-rose-400">CRITICAL CUTOFF: &gt;5.8 kHz</span>
+          </div>
+        </div>
+
+        <!-- Mel-Spectrogram Canvas Container -->
+        <div class="relative w-full h-56 bg-slate-950 rounded-xl overflow-hidden border border-slate-800/80 shadow-inner">
+          <canvas id="melHeatmapCanvas" class="w-full h-full block"></canvas>
+          <div class="scan-line"></div>
+          <!-- Critical 5.8kHz Boundary Label Overlay -->
+          <div class="absolute top-2 right-3 text-[9px] font-mono text-rose-400 pointer-events-none flex items-center space-x-1">
+            <span>&gt;5.8 kHz CUTOFF BOUNDARY</span>
+          </div>
+          <div class="absolute bottom-2 left-3 text-[9px] font-mono text-slate-600 pointer-events-none">
+            64 MEL BINS (20 Hz &rarr; 8,000 Hz)
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM SECTION: DETAILED DSP METRICS CARDS & INTERACTIVE TEST BENCH -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+      <!-- Card 1: Spectral Roll-off -->
+      <div class="hud-border rounded-xl p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-[11px] font-mono uppercase tracking-wider">Spectral Roll-off</span>
+          <span class="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">&gt; 5.8 kHz</span>
+        </div>
+        <div>
+          <div id="metricRolloffVal" class="text-2xl font-bold font-mono text-white">0.0 Hz</div>
+        </div>
+        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-3">
+          <div id="barRolloff" class="bg-cyan-400 h-full transition-all duration-200" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Card 2: Phase Jitter -->
+      <div class="hud-border rounded-xl p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-[11px] font-mono uppercase tracking-wider">Phase Jitter</span>
+          <span class="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">Dynamics</span>
+        </div>
+        <div>
+          <div id="metricPhaseVal" class="text-2xl font-bold font-mono text-white">0.000</div>
+        </div>
+        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-3">
+          <div id="barPhase" class="bg-cyan-400 h-full transition-all duration-200" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Card 3: Pitch Micro-Perturbation -->
+      <div class="hud-border rounded-xl p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-[11px] font-mono uppercase tracking-wider">Pitch Jitter (F0)</span>
+          <span class="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">Glottal</span>
+        </div>
+        <div>
+          <div id="metricPitchVal" class="text-2xl font-bold font-mono text-white">0.00 %</div>
+        </div>
+        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-3">
+          <div id="barPitch" class="bg-cyan-400 h-full transition-all duration-200" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Card 4: Synthetic Risk -->
+      <div class="hud-border rounded-xl p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-[11px] font-mono uppercase tracking-wider">AI Risk Index</span>
+          <span class="text-[10px] font-mono text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-800/40">Anomaly</span>
+        </div>
+        <div>
+          <div id="metricRiskVal" class="text-2xl font-bold font-mono text-white">0.000</div>
+        </div>
+        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-3">
+          <div id="barRisk" class="bg-rose-500 h-full transition-all duration-200" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INTERACTIVE TEST BENCH & DEMO CONTROLS -->
+    <div class="hud-border rounded-2xl p-5 bg-gradient-to-r from-slate-900/80 via-slate-900/60 to-slate-950/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-lg bg-cyan-950 border border-cyan-800/50 flex items-center justify-center text-cyan-400">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+          </svg>
+        </div>
+        <div>
+          <h4 class="text-sm font-bold font-mono text-slate-200">Test Bench & Voice Simulation Engine</h4>
+          <p class="text-xs text-slate-400 font-mono">
+            Directly test the DSP sentinel toggle using synthesized neural vocoder artifacts or natural human speech acoustics.
+          </p>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center space-x-3 w-full sm:w-auto">
+        <button id="simSyntheticBtn" class="flex-1 sm:flex-initial px-4 py-2 rounded-lg font-mono text-xs font-semibold uppercase tracking-wider bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/40 hover:border-rose-500 transition-all">
+          ⚡ Simulate Synthetic Deepfake
+        </button>
+        <button id="simHumanBtn" class="flex-1 sm:flex-initial px-4 py-2 rounded-lg font-mono text-xs font-semibold uppercase tracking-wider bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:border-emerald-500 transition-all">
+          🎙️ Simulate Authentic Speech
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-900 bg-slate-950/50 py-4 px-6 text-center font-mono text-xs text-slate-500">
+    AudioSentry • Real-time Voice Sentinel & Deepfake Radar • Pure NumPy &amp; SciPy DSP Engine
+  </footer>
+
+  <!-- Main JavaScript App -->
+  <script src="/static/app.js"></script>
+</body>
+</html>
