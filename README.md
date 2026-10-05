@@ -14,25 +14,6 @@ Unlike resource-heavy deep learning transformer models that require GPUs, AudioS
 3. **Pitch Micro-Perturbations (Glottal Jitter):** Measures cycle-to-cycle fundamental frequency ($F_0$) perturbation. Biological human vocal cords exhibit natural micro-tremor ($0.5\% - 2.5\%$ jitter), whereas synthetic voices often have mathematical perfection ($<0.25\%$) or unphysical vocoder glitches.
 4. **Exponential Moving Average (EMA) Ring Buffer ($\alpha = 0.08$):** Mitigates frame-by-frame volatility and flicker, ensuring smooth, natural confidence transitions and stable verdicts without jumpy oscillations.
 
----
-
-## 🗂️ Project Structure
-
-```text
-AudioSentry Project/
-├── backend/
-│   ├── requirements.txt      # FastAPI, WebSockets, NumPy, SciPy, Uvicorn
-│   ├── main.py               # FastAPI server + 16kHz WebSocket audio ingestion endpoint
-│   └── dsp_engine.py         # Spectral roll-off, phase jitter, pitch micro-perturbation, EMA filter
-├── frontend/
-│   ├── index.html            # Dark security-themed dashboard (Tailwind CSS, SVG gauge, HUD)
-│   └── app.js                # Web Audio API 16kHz streaming, 50ms chunking, dual canvas visualizers
-└── README.md                 # Project documentation and local execution instructions
-```
-
----
-
-
 ## 🔬 DSP Methodology & Mathematics
 
 ### A. Spectral Roll-Off ($> 5.8\text{ kHz}$)
